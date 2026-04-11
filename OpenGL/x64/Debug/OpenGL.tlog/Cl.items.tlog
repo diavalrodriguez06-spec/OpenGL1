@@ -1,2 +1,6 @@
-C:\Users\diava\source\repos\OpenGL\glad.c;C:\Users\diava\source\repos\OpenGL\OpenGL\x64\Debug\glad.obj
-C:\Users\diava\source\repos\OpenGL\Main.cpp;C:\Users\diava\source\repos\OpenGL\OpenGL\x64\Debug\Main.obj
+C:\Users\diava\Documents\OpenGL1\EBO.cpp;C:\Users\diava\Documents\OpenGL1\OpenGL\x64\Debug\EBO.obj
+C:\Users\diava\Documents\OpenGL1\glad.c;C:\Users\diava\Documents\OpenGL1\OpenGL\x64\Debug\glad.obj
+C:\Users\diava\Documents\OpenGL1\Main.cpp;C:\Users\diava\Documents\OpenGL1\OpenGL\x64\Debug\Main.obj
+C:\Users\diava\Documents\OpenGL1\shaderClass.cpp;C:\Users\diava\Documents\OpenGL1\OpenGL\x64\Debug\shaderClass.obj
+C:\Users\diava\Documents\OpenGL1\VAO.cpp;C:\Users\diava\Documents\OpenGL1\OpenGL\x64\Debug\VAO.obj
+C:\Users\diava\Documents\OpenGL1\VBO.cpp;C:\Users\diava\Documents\OpenGL1\OpenGL\x64\Debug\VBO.obj
