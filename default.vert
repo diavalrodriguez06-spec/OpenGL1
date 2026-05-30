@@ -1,33 +1,26 @@
-// Definir el c贸digo fuente del shader de v茅rtices
+// Vertex shader para renderizar un objeto con color y textura
 #version 330 core
-// Entrada de posici贸n 
+
+// Atributos de entrada
 layout (location = 0) in vec3 aPos;
-// Entrada de color
 layout (location = 1) in vec3 aColor;
-// Entrada de coordenadas de textura
 layout (location = 2) in vec2 aTexCoord;
 
-// Salida del color al shader de fragmentos
+// Salidas para el fragment shader
 out vec3 color;
-
-// Salida de las coordenadas de textura al shader de fragmentos
 out vec2 texCoord;
 
-uniform float scale;
+// Matriz de camara (view * projection)
+uniform mat4 camMatrix;
 
-// Matriz de modelo para transformar las posiciones de los v茅rtices
+// Matriz de modelo (posicion y rotacion del objeto)
+// Si no se usa, se puede dejar como identidad desde el CPU
 uniform mat4 model;
-// Matriz de vista para transformar las posiciones de los v茅rtices
-uniform mat4 view;
-// Matriz de proyecci贸n para transformar las posiciones de los v茅rtices
-uniform mat4 proj;
 
 void main()
 {
-// Transformar la posici贸n del v茅rtice usando las matrices de modelo, vista y proyecci贸n
-    gl_Position = proj * view * model * vec4(aPos, 1.0);
-    // Pasar el color al shader de fragmentos
-    color = aColor;
-    // Pasar las coordenadas de textura al shader de fragmentos
+// Transformamos la posici髇 del v閞tice con la matriz de c醡ara y modelo
+    gl_Position = camMatrix * model * vec4(aPos, 1.0);
+    color    = aColor;
     texCoord = aTexCoord;
 }

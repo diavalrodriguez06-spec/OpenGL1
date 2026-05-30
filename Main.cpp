@@ -1,202 +1,342 @@
 #include<iostream>
 #include<cmath>
+#include<vector>
 #include<glad/glad.h>
 #include<GLFW/glfw3.h>
-#include<stb/stb_image.h>
 #include<glm/glm.hpp>
 #include<glm/gtc/matrix_transform.hpp>
 #include<glm/gtc/type_ptr.hpp>
 
-#include "Texture.h"
 #include "shaderClass.h"
+#include "Texture.h"
 #include "VAO.h"
 #include "VBO.h"
 #include "EBO.h"
+#include "Camera.h"
+
+
 
 const unsigned int width = 800;
 const unsigned int height = 800;
 
-
-// Cubo centrado en el origen (cada cara con 4 vértices -> 24 vértices)
-GLfloat vertices[] = {
-	// Posición         // Color         // Coordenadas de textura
-
-	// Frontal (z = +0.5) - rojo
-	-0.5f, -0.5f,  0.5f,  1.0f,0.0f,0.0f,   0.0f, 0.0f,// El primer vértice de la cara frontal tiene posición (-0.5, -0.5, 0.5), color rojo (1.0, 0.0, 0.0) y coordenadas de textura (0.0, 0.0)
-     0.5f, -0.5f,  0.5f,  1.0f,0.0f,0.0f,   1.0f, 0.0f,
-     0.5f,  0.5f,  0.5f,  1.0f,0.0f,0.0f,   1.0f, 1.0f,
-    -0.5f,  0.5f,  0.5f,  1.0f,0.0f,0.0f,   0.0f, 1.0f,
-	// Trasera (z = -0.5) - verde
-     0.5f, -0.5f, -0.5f,  0.0f,1.0f,0.0f,   0.0f, 0.0f,
-    -0.5f, -0.5f, -0.5f,  0.0f,1.0f,0.0f,   1.0f, 0.0f,
-    -0.5f,  0.5f, -0.5f,  0.0f,1.0f,0.0f,   1.0f, 1.0f,
-     0.5f,  0.5f, -0.5f,  0.0f,1.0f,0.0f,   0.0f, 1.0f,
-	 // Trasera (z = -0.5) - verde
-    -0.5f, -0.5f, -0.5f,  0.0f,0.0f,1.0f,   0.0f, 0.0f,
-    -0.5f, -0.5f,  0.5f,  0.0f,0.0f,1.0f,   1.0f, 0.0f,
-    -0.5f,  0.5f,  0.5f,  0.0f,0.0f,1.0f,   1.0f, 1.0f,
-    -0.5f,  0.5f, -0.5f,  0.0f,0.0f,1.0f,   0.0f, 1.0f,
-	// Derecha (x = +0.5) - amarillo
-     0.5f, -0.5f,  0.5f,  1.0f,1.0f,0.0f,   0.0f, 0.0f,
-     0.5f, -0.5f, -0.5f,  1.0f,1.0f,0.0f,   1.0f, 0.0f,
-     0.5f,  0.5f, -0.5f,  1.0f,1.0f,0.0f,   1.0f, 1.0f,
-     0.5f,  0.5f,  0.5f,  1.0f,1.0f,0.0f,   0.0f, 1.0f,
-	 // Superior (y = +0.5) - magenta
-    -0.5f,  0.5f,  0.5f,  1.0f,0.0f,1.0f,   0.0f, 0.0f,
-     0.5f,  0.5f,  0.5f,  1.0f,0.0f,1.0f,   1.0f, 0.0f,
-     0.5f,  0.5f, -0.5f,  1.0f,0.0f,1.0f,   1.0f, 1.0f,
-    -0.5f,  0.5f, -0.5f,  1.0f,0.0f,1.0f,   0.0f, 1.0f,
-	// Inferior (y = -0.5) - cyan
-    -0.5f, -0.5f, -0.5f,  0.0f,1.0f,1.0f,   0.0f, 0.0f,
-     0.5f, -0.5f, -0.5f,  0.0f,1.0f,1.0f,   1.0f, 0.0f,
-     0.5f, -0.5f,  0.5f,  0.0f,1.0f,1.0f,   1.0f, 1.0f,
-    -0.5f, -0.5f,  0.5f,  0.0f,1.0f,1.0f,   0.0f, 1.0f
+struct Vertex {
+    glm::vec3 pos;
+    glm::vec3 color;
+    glm::vec2 tex;
 };
 
-GLuint indices[] = {
-    //frontal
-    0,1,2,  0,2,3,
-    //trasera
-    4,5,6,  4,6,7,
-    // izquierda
-    8,9,10, 8,10,11,
-    // derecha
-    12,13,14, 12,14,15,
-    // superior
-    16,17,18, 16,18,19,
-    // inferior
-    20,21,22, 20,22,23
-};
+std::vector<Vertex> heartVertices;
+std::vector<GLuint> heartIndices;
 
+
+//  CORAZON 3D - capa por capa en Z
+//  Cada capa es la silueta 2D del corazon escalada segun la profundidad
+//  Esto preserva la forma de corazon vista de frente
+
+void generarCorazon(int stepsU, int stepsZ) {
+	// Limpiar datos previos
+    heartVertices.clear();
+    heartIndices.clear();
+
+	// Parámetros del corazón
+    const float PI = 3.14159265358979f;
+    float scale = 0.07f;
+    float profMax = 0.6f; // mitad del grosor total
+
+    // Generar capas de Z (de -profMax a +profMax)
+    for (int k = 0; k <= stepsZ; k++) {
+        float z = -profMax + 2.0f * profMax * (float)k / stepsZ;
+        // Factor de escala: en los bordes (z = +-profMax) el corazon es un punto
+        // en el centro (z=0) es su tamaño maximo - forma de lente
+        float factorZ = sqrtf(1.0f - (z / profMax) * (z / profMax));
+		// Evitar que factorZ sea exactamente 0 en los bordes para no perder completamente la forma
+        factorZ = glm::max(factorZ, 0.001f);
+
+		// Generar la silueta del corazón en esta capa de Z
+        for (int i = 0; i <= stepsU; i++) {
+            float t = (float)i / stepsU * 2.0f * PI;
+
+			// Ecuación paramétrica del corazón
+            float sinT = sinf(t);
+            float cosT = cosf(t);
+
+            // Silueta del corazon en XY
+            float x = 16.0f * sinT * sinT * sinT;
+            float y = 13.0f * cosT - 5.0f * cosf(2 * t)
+                - 2.0f * cosf(3 * t) - cosf(4 * t);
+
+			// Crear el vértice con posición, color y coordenadas de textura
+            Vertex vtx;
+            vtx.pos = glm::vec3(x * scale * factorZ,
+                y * scale * factorZ,
+                z);
+            vtx.color = glm::vec3(1.0f, 1.0f, 1.0f); // blanco -> textura sin teñir
+            // UV: proyeccion planar desde el frente (la imagen se ve de frente sin distorsion)
+            // x va de -16*scale a 16*scale, y va de -17*scale a 13*scale aprox
+            float u_tex = (x * scale * factorZ) / (16.0f * scale) * 0.5f + 0.5f;
+            
+            float v_tex = (y * scale * factorZ) / (17.0f * scale) * 0.5f + 0.5f;
+            vtx.tex = glm::vec2(u_tex, v_tex);
+            heartVertices.push_back(vtx);
+        }
+    }
+
+    // Indices conectando capas adyacentes
+    for (int k = 0; k < stepsZ; k++) {
+        for (int i = 0; i < stepsU; i++) {
+            int a = k * (stepsU + 1) + i;
+            int b = a + 1;
+            int c = (k + 1) * (stepsU + 1) + i;
+            int d = c + 1;
+			// Dos triángulos por cada par de vértices adyacentes entre capas
+            heartIndices.push_back(a); heartIndices.push_back(c); heartIndices.push_back(b);
+            heartIndices.push_back(b); heartIndices.push_back(c); heartIndices.push_back(d);
+        }
+    }
+
+    // Tapas: capa frontal y trasera - abanico desde el centro
+    // Capa delantera (k = stepsZ)
+    {
+        int base = (int)heartVertices.size();
+        // Centro de la tapa delantera
+        Vertex centro;
+		// En la capa delantera, el corazón es un punto en el centro (x=0,y=0) con z=profMax
+        centro.pos = glm::vec3(0.0f, 0.0f, profMax);
+        centro.color = glm::vec3(1.0f);
+        centro.tex = glm::vec2(0.5f, 0.5f);
+        heartVertices.push_back(centro);
+        int centroIdx = base;
+
+		// Conectar el centro con los vértices de la última capa para formar la tapa delantera
+        int capaBase = stepsZ * (stepsU + 1);
+        for (int i = 0; i < stepsU; i++) {
+            heartIndices.push_back(centroIdx);
+            heartIndices.push_back(capaBase + i);
+            heartIndices.push_back(capaBase + i + 1);
+        }
+    }
+    // Capa trasera (k = 0)
+    {
+        int base = (int)heartVertices.size();
+        Vertex centro;
+        centro.pos = glm::vec3(0.0f, 0.0f, -profMax);
+        centro.color = glm::vec3(1.0f);
+        centro.tex = glm::vec2(0.5f, 0.5f);
+        heartVertices.push_back(centro);
+        int centroIdx = base;
+
+        for (int i = 0; i < stepsU; i++) {
+            heartIndices.push_back(centroIdx);
+            heartIndices.push_back(i + 1);
+            heartIndices.push_back(i);
+        }
+    }
+}
+
+
+//  CURVA DE BEZIER CUBICA (4 puntos de control)
+
+//  Para generar la curva, se itera t de 0 a 1 y se calcula B(t) para cada t
+glm::vec3 P0(-4.0f, 0.0f, 4.0f);
+glm::vec3 P1(-1.0f, 5.0f, 0.0f);
+glm::vec3 P2(1.0f, 5.0f, 0.0f);
+glm::vec3 P3(4.0f, 0.0f, -4.0f);
+
+// Función para calcular un punto en la curva de Bezier dado un valor de t
+glm::vec3 bezier(float t) {
+    float u = 1.0f - t;
+	return u * u * u * P0 + 3 * u * u * t * P1 + 3 * u * t * t * P2 + t * t * t * P3;// B(t) = (1-t)^3*P0 + 3(1-t)^2*t*P1 + 3(1-t)*t^2*P2 + t^3*P3
+}
+// Función para generar los vértices de la curva de Bezier, con color y coordenadas de textura
+std::vector<float> generarLineaBezier(int N) {
+    std::vector<float> v;
+    for (int i = 0; i <= N; i++) {
+        float t = (float)i / N;
+        glm::vec3 p = bezier(t);
+        v.push_back(p.x); v.push_back(p.y); v.push_back(p.z);
+        v.push_back(0.0f); v.push_back(1.0f); v.push_back(1.0f);
+        v.push_back(0.0f); v.push_back(0.0f);
+    }
+    return v;
+}
+
+// Puntos de control (solo para referencia, se pueden ocultar)
+std::vector<float> generarPuntosControl() {
+    std::vector<float> v;
+    glm::vec3 pts[] = { P0, P1, P2, P3 };
+    for (auto& p : pts) {
+        v.push_back(p.x); v.push_back(p.y); v.push_back(p.z);
+        v.push_back(1.0f); v.push_back(0.5f); v.push_back(0.0f);
+        v.push_back(0.0f); v.push_back(0.0f);
+    }
+    return v;
+}
 
 int main() {
-	// Inicializar GLFW.
-	glfwInit();
+    glfwInit();
+	// Configuración de la ventana y contexto OpenGL
+    glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
+    glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
+    glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
 
-	// Configurar GLFW para usar OpenGL 3.3 Core Profile
-	// Esto asegura que estamos utilizando la versión correcta de OpenGL
-	glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
-	glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
-	// Esto indica que queremos usar el perfil core de OpenGL, lo que significa que no tendremos acceso a funciones obsoletas
-	glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
-
-
-	// Crear una ventana de 800x800 píxeles con el título "LearnOpenGL"
-	GLFWwindow* window = glfwCreateWindow(width, height, "LearnOpenGL", NULL,NULL);
-	// Verificar si la ventana se creó correctamente
-	if (window == NULL) {
-		std::cout << "ERROR AL CREAR VENTANA" << std::endl;
-		glfwTerminate();
-		return -1;
-	}
-	// Hacer que el contexto de OpenGL de la ventana sea el contexto actual para el hilo principal
-	glfwMakeContextCurrent(window);
-
-    // Cargar todas las funciones de OpenGL utilizando GLAD
+	// Crear la ventana
+    GLFWwindow* window = glfwCreateWindow(width, height, "Corazon en Bezier", NULL, NULL);
+    if (!window) { glfwTerminate(); return -1; }
+    glfwMakeContextCurrent(window);
     gladLoadGLLoader((GLADloadproc)glfwGetProcAddress);
+    glViewport(0, 0, width, height);
 
-	// Establecer el tamaño del viewport
-	// que es la región de la ventana donde se renderizará la escena
-	// En este caso, estamos configurando el viewport para que ocupe toda la ventana de 800x800 píxeles
-	glViewport(0, 0, width, height);
+	// Cargar el shader
+    Shader shader("default.vert", "default.frag");
 
-	// Crear un programa de shader utilizando los archivos de shader "default.vert" y "default.frag"
-	Shader shaderProgram("default.vert", "default.frag");
+	// Cargar la textura y asignar la unidad de textura al shader
+    Texture textura("a.png", GL_TEXTURE_2D, GL_TEXTURE0, GL_RGBA, GL_UNSIGNED_BYTE);
+    textura.texUnit(shader, "tex0", 0);
 
-	// Crear un Vertex Array Object (VAO) para almacenar la configuración de los vértices
-	VAO VAO1;
-	VAO1.Bind();
+	// Generar el modelo del corazón y preparar los buffers de OpenGL
+    generarCorazon(100, 30);
+	// Flatten de los datos del corazón para subir a OpenGL (posiciones, colores, UVs)
+    std::vector<float> heartFlat;
+    for (auto& v : heartVertices) {
+		heartFlat.push_back(v.pos.x); heartFlat.push_back(v.pos.y); heartFlat.push_back(v.pos.z);// posiciones
+		heartFlat.push_back(v.color.r); heartFlat.push_back(v.color.g); heartFlat.push_back(v.color.b);// colores
+		heartFlat.push_back(v.tex.x); heartFlat.push_back(v.tex.y);// coordenadas de textura
+    }
 
-	// Crear un Vertex Buffer Object (VBO) para almacenar los datos de los vértices en la memoria de la GPU
-	VBO VBO1(vertices, sizeof(vertices));
-	// Crear un Element Buffer Object (EBO) para almacenar los índices de los vértices que forman los triángulos
-	EBO EBO1(indices, sizeof(indices));
+	// Crear VAO, VBO y EBO para el corazón
+    GLuint VAO_heart, VBO_heart, EBO_heart;
+	glGenVertexArrays(1, &VAO_heart); glGenBuffers(1, &VBO_heart); glGenBuffers(1, &EBO_heart);// generar los IDs de los buffers
+	glBindVertexArray(VAO_heart);// vincular el VAO para configurar los atributos de vértice
+	glBindBuffer(GL_ARRAY_BUFFER, VBO_heart);// vincular el VBO para subir los datos de vértice
+	glBufferData(GL_ARRAY_BUFFER, heartFlat.size() * sizeof(float), heartFlat.data(), GL_STATIC_DRAW);// subir los datos de vértice al VBO
+	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, EBO_heart);// vincular el EBO para subir los índices de los triángulos
+	glBufferData(GL_ELEMENT_ARRAY_BUFFER, heartIndices.size() * sizeof(GLuint), heartIndices.data(), GL_STATIC_DRAW);// subir los índices al EBO
+	glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 8 * sizeof(float), (void*)0);          glEnableVertexAttribArray(0);// posición: 3 floats, stride de 8 floats (pos+color+tex), offset 0
+	glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 8 * sizeof(float), (void*)(3 * sizeof(float))); glEnableVertexAttribArray(1);// color: 3 floats, stride de 8 floats, offset de 3 floats (después de la posición)
+	glVertexAttribPointer(2, 2, GL_FLOAT, GL_FALSE, 8 * sizeof(float), (void*)(6 * sizeof(float))); glEnableVertexAttribArray(2);// coordenadas de textura: 2 floats, stride de 8 floats, offset de 6 floats (después de la posición y el color)
+    glBindVertexArray(0);
 
-	// Configurar la forma en que se interpretarán los datos de los vértices
-	VAO1.LinkAttrib(VBO1, 0, 3, GL_FLOAT, 8 * sizeof(float), (void*)0); // Posición
-	VAO1.LinkAttrib(VBO1, 1, 3, GL_FLOAT, 8 * sizeof(float), (void*)(3 * sizeof(float))); // Color
-	VAO1.LinkAttrib(VBO1, 2, 2, GL_FLOAT, 8 * sizeof(float), (void*)(6 * sizeof(float)));
-	// Desenlazar el VAO, VBO y EBO para evitar modificaciones accidentales
-	VAO1.Unbind();
-	VBO1.Unbind();
-	EBO1.Unbind();
+	// Generar la curva de Bezier y preparar los buffers de OpenGL
+	const int N_SEG = 120;// número de segmentos para aproximar la curva de Bezier
+	std::vector<float> lineaBez = generarLineaBezier(N_SEG);// generar los vértices de la curva de Bezier (posiciones, colores, UVs)
+	GLuint VAO_bez, VBO_bez;// no necesitamos EBO para la curva, se dibuja con GL_LINE_STRIP
+	glGenVertexArrays(1, &VAO_bez); glGenBuffers(1, &VBO_bez);// generar los IDs de los buffers para la curva de Bezier
+	glBindVertexArray(VAO_bez);// vincular el VAO para configurar los atributos de vértice de la curva de Bezier
+	glBindBuffer(GL_ARRAY_BUFFER, VBO_bez);// vincular el VBO para subir los datos de vértice de la curva de Bezier
+	// Subir los datos de vértice de la curva de Bezier al VBO (posiciones, colores, UVs)
+    glBufferData(GL_ARRAY_BUFFER, lineaBez.size() * sizeof(float), lineaBez.data(), GL_STATIC_DRAW);
+    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 8 * sizeof(float), (void*)0);          glEnableVertexAttribArray(0);
+    glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 8 * sizeof(float), (void*)(3 * sizeof(float))); glEnableVertexAttribArray(1);
+    glVertexAttribPointer(2, 2, GL_FLOAT, GL_FALSE, 8 * sizeof(float), (void*)(6 * sizeof(float))); glEnableVertexAttribArray(2);
+    glBindVertexArray(0);
 
-	// Obtener la ubicación del uniforme "scale" en el programa de shader para poder modificar su valor desde el código
-	GLuint uniID = glGetUniformLocation(shaderProgram.ID, "scale");
+	// Generar los puntos de control de la curva de Bezier (opcional, para referencia) y preparar los buffers de OpenGL
+    std::vector<float> ctrlPts = generarPuntosControl();
+    GLuint VAO_ctrl, VBO_ctrl;
+    glGenVertexArrays(1, &VAO_ctrl); glGenBuffers(1, &VBO_ctrl);
+    glBindVertexArray(VAO_ctrl);
+    glBindBuffer(GL_ARRAY_BUFFER, VBO_ctrl);
+    glBufferData(GL_ARRAY_BUFFER, ctrlPts.size() * sizeof(float), ctrlPts.data(), GL_STATIC_DRAW);
+    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 8 * sizeof(float), (void*)0);          glEnableVertexAttribArray(0);
+    glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 8 * sizeof(float), (void*)(3 * sizeof(float))); glEnableVertexAttribArray(1);
+    glVertexAttribPointer(2, 2, GL_FLOAT, GL_FALSE, 8 * sizeof(float), (void*)(6 * sizeof(float))); glEnableVertexAttribArray(2);
+    glBindVertexArray(0);
 
-	//Textura
-	Texture a("a.png", GL_TEXTURE_2D, GL_TEXTURE0, GL_RGBA, GL_UNSIGNED_BYTE);
-	a.texUnit(shaderProgram, "tex0", 0);
+    glEnable(GL_DEPTH_TEST);
 
-	// Variable para controlar la rotación de los objetos en la escena
-	float rotation = 0.0f;
-	// Variable para almacenar el tiempo anterior y controlar la velocidad de rotación
-	double prevTime = glfwGetTime();
+	// Crear la cámara y configurar su posición inicial
+    Camera camera(width, height, glm::vec3(0.0f, 4.0f, 10.0f));
 
-	glEnable(GL_DEPTH_TEST); // Habilitar el test de profundidad para renderizar correctamente los objetos en 3D
+	// Variables para controlar la animación del corazón a lo largo de la curva de Bezier
+	bool  modoAnimacion = false;// false = modo manual (corazón fijo en el centro), true = modo animación (corazón se mueve a lo largo de la curva de Bezier)
+	float bezierT = 0.0f;// parámetro t para la curva de Bezier, va de 0.0f a 1.0f
+	float bezierSpeed = 0.2f;// velocidad de animación a lo largo de la curva de Bezier (t por segundo)
+	bool  teclaB = false;// para detectar el momento en que se presiona la tecla B (toggle de animación)
+    float lastTime = (float)glfwGetTime();
 
+	std::cout << "B    -> activar/desactivar animacion" << std::endl;// al activar la animación, el corazón se mueve a lo largo de la curva de Bezier, recorriéndola continuamente
+	std::cout << "WASD -> mover camara" << std::endl;// controles de cámara: W = adelante, S = atrás, A = izquierda, D = derecha
+	std::cout << "ESC  -> salir" << std::endl;// presionar ESC para cerrar la ventana y salir del programa
 
+	// Bucle principal de renderizado
+    while (!glfwWindowShouldClose(window)) {
+		float now = (float)glfwGetTime();// tiempo actual en segundos desde que se inició el programa
+		float dt = now - lastTime;// delta time: tiempo transcurrido desde el último frame, se usa para hacer que la animación sea independiente de la velocidad de fotogramas
+		lastTime = now;// actualizar el tiempo del último frame
 
-	// Bucle principal de la aplicación
-	while (!glfwWindowShouldClose(window)) {
+		// Limpiar la pantalla y activar el shader
+		glClearColor(0.01f, 0.07f, 0.05f, 1.0f);
+        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+        shader.Activate();
 
-		// Configurar el color de fondo para la ventana en cada iteración del bucle
-		glClearColor(0.2f, 0.3f, 0.3f, 1.0f);
-		// Limpiar el buffer de color para aplicar el color de fondo configurado en cada iteración del bucle
-		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-		// Usar el programa de shader para renderizar la escena
-		shaderProgram.Activate();
+		// Detectar si se presiona la tecla B para activar/desactivar la animación del corazón a lo largo de la curva de Bezier
+        bool B_ahora = glfwGetKey(window, GLFW_KEY_B) == GLFW_PRESS;
+        if (B_ahora && !teclaB) {
+            modoAnimacion = !modoAnimacion;
+            if (modoAnimacion) { bezierT = 0.0f; std::cout << "[BEZIER ON]" << std::endl; }
+            else                std::cout << "[MANUAL ON]" << std::endl;
+        }
+		teclaB = B_ahora;// actualizar el estado de la tecla B para detectar el momento en que se presiona
 
-		double curntTime = glfwGetTime();
-		if(curntTime - prevTime >= 1.0 /60.0) {
-			rotation += 0.5f; // Incrementar la rotación en 1 grado cada 0.01 segundos
-			prevTime = curntTime; // Actualizar el tiempo anterior para la próxima comparación
-		}
+		// Calcular la posición del corazón: si estamos en modo animación, se actualiza el parámetro t para recorrer la curva de Bezier y se calcula la posición del corazón en la curva; si estamos en modo manual, el corazón se mantiene fijo en el centro (0,0,0)
+        glm::vec3 posCorazon(0.0f);
+		// Si el modo de animación está activo, actualizar el parámetro t para recorrer la curva de Bezier y calcular la posición del corazón en la curva
+        if (modoAnimacion) {
+            bezierT += bezierSpeed * dt;
+            if (bezierT > 1.0f) bezierT = 0.0f;
+            posCorazon = bezier(bezierT);
+        }
+		camera.Inputs(window);// actualizar la cámara con los inputs del usuario (WASD para mover la cámara)
 
-		// Crear las matrices de transformación para el modelo, la vista y la proyección
-		glm:: mat4 model = glm::mat4(1.0f);
-		glm::mat4 view = glm::mat4(1.0f);
-		glm::mat4 proj = glm::mat4(1.0f);
+		// Calcular las matrices de vista y proyección de la cámara, y la matriz de modelo para el corazón (que incluye la posición en la curva de Bezier y una rotación sobre el eje Y para darle un efecto de giro)
+        glm::mat4 view = glm::lookAt(camera.position, camera.position + camera.Orientation, camera.up);
+        glm::mat4 proj = glm::perspective(glm::radians(45.0f), (float)width / height, 0.1f, 100.0f);
+        glm::mat4 camMatrix = proj * view;
 
-		// Aplicar una rotación al modelo en el eje Y utilizando la función glm::rotate
-		model = glm::rotate(model, glm::radians(rotation), glm::vec3(0.0f, 1.0f, 0.0f));
-		view = glm::translate(view, glm::vec3(0.0f, 0.0f, -3.0f));
-		proj = glm::perspective(glm::radians(45.0f), (float)(width/height),0.1f, 100.0f);
+        // Corazon: trasladar a posicion en la curva + rotar sobre Y
+        float angle = (float)glfwGetTime() * 1.2f;
+        glm::mat4 model = glm::translate(glm::mat4(1.0f), posCorazon);
+        model = glm::rotate(model, angle, glm::vec3(0.0f, 1.0f, 0.0f));
 
-		// Obtener las ubicaciones de los uniformes "model", "view" y "proj" en el programa de shader y enviar las matrices de transformación correspondientes para que se apliquen a los objetos renderizados
-		int modelLoc = glGetUniformLocation(shaderProgram.ID, "model");
-		glUniformMatrix4fv(modelLoc, 1, GL_FALSE, glm::value_ptr(model));
-		int viewLoc = glGetUniformLocation(shaderProgram.ID, "view");
-		glUniformMatrix4fv(viewLoc, 1, GL_FALSE, glm::value_ptr(view));
-		int projLoc = glGetUniformLocation(shaderProgram.ID, "proj");
-		glUniformMatrix4fv(projLoc, 1, GL_FALSE, glm::value_ptr(proj));
+		// Enviar las matrices al shader
+        glUniformMatrix4fv(glGetUniformLocation(shader.ID, "camMatrix"), 1, GL_FALSE, glm::value_ptr(camMatrix));
+        glUniformMatrix4fv(glGetUniformLocation(shader.ID, "model"), 1, GL_FALSE, glm::value_ptr(model));
 
-		// Modificar el valor del uniforme "scale" en el shader para controlar la escala de los objetos renderizados
-		glUniform1f(uniID, 0.5f);
-		// Vincular la textura para que se aplique a los objetos renderizados
-		a.Bind();
-		// Vincular el VAO para que las siguientes llamadas a funciones de dibujo se apliquen a este VAO
-		VAO1.Bind();
-		// Dibujar el triángulo utilizando los vértices configurados en el VAO
-		glDrawElements(GL_TRIANGLES, sizeof(indices) / sizeof(int), GL_UNSIGNED_INT, 0);
-		glfwSwapBuffers(window);
+		// Dibujar el corazón con textura
+        textura.Bind();
+        glBindVertexArray(VAO_heart);
+        glDrawElements(GL_TRIANGLES, (GLsizei)heartIndices.size(), GL_UNSIGNED_INT, 0);
+        glBindVertexArray(0);
 
-		// Aquí es donde se realizarían las operaciones de renderizado y actualización de la escena
-		glfwPollEvents();
-	}
+        // Curva y puntos sin textura
+        glBindTexture(GL_TEXTURE_2D, 0);
+        glm::mat4 identity = glm::mat4(1.0f);
+        glUniformMatrix4fv(glGetUniformLocation(shader.ID, "camMatrix"), 1, GL_FALSE, glm::value_ptr(camMatrix));
+        glUniformMatrix4fv(glGetUniformLocation(shader.ID, "model"), 1, GL_FALSE, glm::value_ptr(identity));
 
+		// Curva de Bezier
+		glLineWidth(3.0f);// aumentar el grosor de la línea para que se vea mejor
+		glBindVertexArray(VAO_bez);// vincular el VAO de la curva de Bezier para dibujarla
+		glDrawArrays(GL_LINE_STRIP, 0, N_SEG + 1);// dibujar la curva de Bezier como una línea continua (GL_LINE_STRIP) usando los vértices del VAO_bez
+		glBindVertexArray(0);// desvincular el VAO después de dibujar la curva de Bezier
 
-	// Limpiar los recursos utilizados por OpenGL
-	VAO1.Delete();
-	VBO1.Delete();
-	EBO1.Delete();
-	a.Delete();
-	shaderProgram.Delete();
+ 
+		// Puntos de control de la curva de Bezier (opcional, para referencia)
+        glfwSwapBuffers(window);
+        glfwPollEvents();
 
+		// Detectar si se presiona la tecla ESC para cerrar la ventana y salir del programa
+        if (glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS)
+            glfwSetWindowShouldClose(window, true);
+    }
 
-	// Limpiar y cerrar la aplicación
-	glfwDestroyWindow(window);
-	// Terminar GLFW para liberar los recursos utilizados por la biblioteca
-	glfwTerminate();
-	return 0;
-	}
+	// Limpiar los recursos de OpenGL y cerrar la ventana antes de salir del programa
+    glDeleteVertexArrays(1, &VAO_heart); glDeleteBuffers(1, &VBO_heart); glDeleteBuffers(1, &EBO_heart);
+    glDeleteVertexArrays(1, &VAO_bez);   glDeleteBuffers(1, &VBO_bez);
+    glDeleteVertexArrays(1, &VAO_ctrl);  glDeleteBuffers(1, &VBO_ctrl);
+    textura.Delete();
+    shader.Delete();
+    glfwDestroyWindow(window);
+    glfwTerminate();
+    return 0;
+}
